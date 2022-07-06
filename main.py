@@ -55,12 +55,14 @@ class Digraph:
 
     def add_nodes_from(self, nodes):
         self.nodes.update(nodes)
+        self.update()
 
     def add_edges_from(self, edges):
         self.edges.update(edges)
         for edge in self.edges:
             for node in edge:
                 self.nodes.add(node)
+        self.update()
 
     def add_ltDict(self, lt):
         self.ltDict.update(lt)
@@ -79,36 +81,37 @@ class Digraph:
 
     def remove_node(self, node):
         self.nodes.remove(node)
-        for edge in self.edges:
-            if node in edge:
-                self.edges.remove(edge)
+        for pred in self.predDict[node]:
+            self.edges.remove((pred, node))
+        for succ in self.succDict[node]:
+            self.edges.remove((node, succ))
+        self.update()
 
     def remove_node_from(self, nodes):
         self.nodes.difference_update(nodes)
         for node in nodes:
-            for edge in self.edges:
-                if node in edge:
-                    self.edges.remove(edge)
+            for pred in self.predDict[node]:
+                self.edges.remove((pred, node))
+            for succ in self.succDict[node]:
+                self.edges.remove((node, succ))
+        self.update()
 
     def remove_edge(self, edge):
         self.edges.remove(edge)
-        for node in edge:
-            if self.inoutDegree[node] == 0:
-                self.nodes.remove(node)
+        self.update()
 
     def remove_edge_from(self, edges):
         self.edges.difference_update(edges)
-        for edge in edges:
-            for node in edge:
-                if self.inoutDegree[node] == 0:
-                    self.nodes.remove(node)
+        self.update()
 
     def clear(self):
         self.edges.clear()
         self.nodes.clear()
+        self.update()
 
     def clear_edges(self):
         self.edges.clear()
+        self.update()
 
     def show_nodes(self):
         return self.nodes
@@ -137,10 +140,16 @@ class Digraph:
         return it_edges
 
     def find_pred_nodes(self):
-        self.predDict = findPredNodes(self.edges)
+        self.predDict = {node: [] for node in self.nodes}
+        for pred, succ in self.edges:
+            self.predDict[succ].append(pred)
+        return self.predDict
 
     def find_succ_nodes(self):
-        self.succDict = findSuccNodes(self.edges)
+        self.succDict = {node: [] for node in self.nodes}
+        for pred, succ in self.edges:
+            self.succDict[pred].append(succ)
+        return self.succDict
 
     def number_of_nodes(self):
         return len(self.nodes)
@@ -170,30 +179,33 @@ class Digraph:
                 queue.append(_)
         return subtree
 
-
-def findPredNodes(edges):
-    nodes = {node for edge in edges for node in edge}
-    predDict = {node: [] for node in nodes}
-    for pred, succ in edges:
-        predDict[succ].append(pred)
-    return predDict
+    def update(self):
+        self.find_pred_nodes()
+        self.find_succ_nodes()
+        self.cal_degree()
 
 
-def findSuccNodes(edges):
-    nodes = {node for edge in edges for node in edge}
-    succDict = {node: [] for node in nodes}
-    for pred, succ in edges:
-        succDict[pred].append(succ)
-    return succDict
+# def findPredNodes(edges):
+#     nodes = {node for edge in edges for node in edge}
+#     predDict = {node: [] for node in nodes}
+#     for pred, succ in edges:
+#         predDict[succ].append(pred)
+#     return predDict
+#
+#
+# def findSuccNodes(edges):
+#     nodes = {node for edge in edges for node in edge}
+#     succDict = {node: [] for node in nodes}
+#     for pred, succ in edges:
+#         succDict[pred].append(succ)
+#     return succDict
 
 
 # 拓扑排序
 def TopologicalSort(graph: Digraph()):
     topoSort = list()
-    graph.find_succ_nodes()
-    succDict = graph.succDict
-    graph.cal_degree()
-    inDegree = graph.inDegree
+    graph.update()
+    inDegree = graph.inDegree.copy()
     queue = deque()
     for node in inDegree:
         if not inDegree[node]:
@@ -201,7 +213,7 @@ def TopologicalSort(graph: Digraph()):
             topoSort.append(node)
     while queue:
         pre = queue.popleft()
-        for succ in succDict[pre]:
+        for succ in graph.succDict[pre]:
             inDegree[succ] -= 1
             if not inDegree[succ]:
                 queue.append(succ)
@@ -215,10 +227,9 @@ def calQuantity(graph: Digraph()):
     for i in graph.demDict.keys():
         nodeQuantity[i] = 1
     reverseTopoSort = list(reversed(TopologicalSort(graph)))
-    graph.cal_degree()
-    inDegree = graph.inDegree
-    graph.find_pred_nodes()
-    predDict = graph.predDict
+    graph.update()
+    inDegree = graph.inDegree.copy()
+    predDict = graph.predDict.copy()
     for i in reverseTopoSort:
         if inDegree[i] == 0:
             break
@@ -231,8 +242,8 @@ def calQuantity(graph: Digraph()):
 def calCumLt(graph: Digraph()):
     cumLtDict = {node: 0 for node in graph.nodes}
     topoSort = TopologicalSort(graph)
-    graph.find_pred_nodes()
-    predDict = graph.predDict
+    #graph.find_pred_nodes()
+    predDict = graph.predDict.copy()
     for i in topoSort:
         if not predDict[i]:
             cumLtDict[i] = graph.ltDict[i]
@@ -243,7 +254,7 @@ def calCumLt(graph: Digraph()):
 
 def findLongestPath(graph: Digraph(), node):
     LongestPath = list()
-    predDict = graph.predDict
+    predDict = graph.predDict.copy()
     cumLtDict = calCumLt(graph)
     queue = deque()
     queue.append(node)
@@ -292,11 +303,12 @@ class SerialGraph(Digraph):
             self.edges.add((i, i + 1))
 
         genData = GenData(self.nodes, self.edges)
-        self.ltDict = genData.ltDict
-        self.hcDict = genData.hcDict
-        self.slaDict = genData.slaDict
-        self.quaDict = genData.quaDict
-        self.demDict = genData.demDict
+        self.ltDict = genData.ltDict.copy()
+        self.hcDict = genData.hcDict.copy()
+        self.slaDict = genData.slaDict.copy()
+        self.quaDict = genData.quaDict.copy()
+        self.demDict = genData.demDict.copy()
+        del genData
 
 
 class DistributionGraph(Digraph):
@@ -315,11 +327,12 @@ class DistributionGraph(Digraph):
             self.edges.add((x, i))
 
         genData = GenData(self.nodes, self.edges)
-        self.ltDict = genData.ltDict
-        self.hcDict = genData.hcDict
-        self.slaDict = genData.slaDict
-        self.quaDict = genData.quaDict
-        self.demDict = genData.demDict
+        self.ltDict = genData.ltDict.copy()
+        self.hcDict = genData.hcDict.copy()
+        self.slaDict = genData.slaDict.copy()
+        self.quaDict = genData.quaDict.copy()
+        self.demDict = genData.demDict.copy()
+        del genData
 
 
 class AssemblyGraph(Digraph):
@@ -338,11 +351,12 @@ class AssemblyGraph(Digraph):
             self.edges.add((i, x))
 
         genData = GenData(self.nodes, self.edges)
-        self.ltDict = genData.ltDict
-        self.hcDict = genData.hcDict
-        self.slaDict = genData.slaDict
-        self.quaDict = genData.quaDict
-        self.demDict = genData.demDict
+        self.ltDict = genData.ltDict.copy()
+        self.hcDict = genData.hcDict.copy()
+        self.slaDict = genData.slaDict.copy()
+        self.quaDict = genData.quaDict.copy()
+        self.demDict = genData.demDict.copy()
+        del genData
 
 
 class GeneralGraph(Digraph):
@@ -371,11 +385,12 @@ class GeneralGraph(Digraph):
                 numEdges -= 1
 
         genData = GenData(self.nodes, self.edges)
-        self.ltDict = genData.ltDict
-        self.hcDict = genData.hcDict
-        self.slaDict = genData.slaDict
-        self.quaDict = genData.quaDict
-        self.demDict = genData.demDict
+        self.ltDict = genData.ltDict.copy()
+        self.hcDict = genData.hcDict.copy()
+        self.slaDict = genData.slaDict.copy()
+        self.quaDict = genData.quaDict.copy()
+        self.demDict = genData.demDict.copy()
+        del genData
 
 
 class GenData:
@@ -409,18 +424,85 @@ class GenData:
             self.demDict[_] = (random.uniform(10, 100), random.uniform(1, 10))
 
 
+def calNodeScore(graph: Digraph()):
+    a = 1.5
+    b = 2.0
+    scoreDict = dict()
+    topoSort = TopologicalSort(graph)
+    for node in topoSort:
+        if not graph.predDict[node]:
+            scoreDict[node] = graph.ltDict[node] * a * graph.inoutDegree[node]
+        else:
+            predScore: float = 0
+            for pred in graph.predDict[node]:
+                predScore += scoreDict[pred] * graph.quaDict[(pred, node)]
+            scoreDict[node] = graph.ltDict[node] * (a * graph.inoutDegree[node] + b * predScore)
+    return dict(sorted(scoreDict.items(), key=lambda x: x[1], reverse=True))
+
+
+def calLtProportion(graph: Digraph()):
+    ltProportionDict = dict()
+    cumLtDict = calCumLt(graph)
+    for product in graph.demDict:
+        allPath = findLongestPath(graph, product)
+        for path in allPath:
+            for node in path:
+                ltProportionDict[(node, product)] = graph.ltDict[node] / cumLtDict[product]
+    ltProportionDict = dict(sorted(ltProportionDict.items(), key=lambda x: x[1], reverse=True))
+    return ltProportionDict
+
+
+def findAdjDict(graph: Digraph()):
+    adjDict = dict()
+    for node in graph.nodes:
+        adjDict[node] = graph.predDict[node] + graph.succDict[node]
+    return adjDict
+
+
+def splitGraph(graph: Digraph()):
+    nodes = graph.nodes.copy()
+    allGraph = list()
+    visited = {node: False for node in nodes}
+    while nodes:
+        queue = deque()
+        queue.append(nodes.pop())
+        stk = list()
+        while queue:
+            x = queue.popleft()
+            visited[x] = True
+            nodes.discard(x)
+            if not graph.predDict[x] and not graph.succDict[x]:
+                 stk.append(x)
+            for pred in graph.predDict[x]:
+                if not visited[pred]:
+                    queue.append(pred)
+                    stk.append([pred, x])
+            for succ in graph.succDict[x]:
+                if not visited[succ]:
+                    queue.append(succ)
+                    stk.append([x, succ])
+        allGraph.append(stk[:])
+    return allGraph
+
+
+def splitGraphWithNodes(graph: Digraph(), nodesToRemove):
+    temp = Digraph()
+    temp.add_edges_from(graph.edges)
+    temp.remove_node_from(nodesToRemove)
+    return splitGraph(temp)
+
+
 if __name__ == '__main__':
     pData = InputData('manufacture_node_df.csv', 'manufacture_edge_df.csv', 'manufacture_demand_df.csv')
     G = Digraph()
+    print(pData.edges)
     G.add_edges_from(pData.edges)
     G.add_ltDict(pData.ltDict)
     G.add_hcDict(pData.hcDict)
     G.add_slaDict_from(pData.slaDict)
     G.add_quaDict_from(pData.quaDict)
     G.add_demDict_from(pData.demDict)
-    G.cal_degree()
-    G.find_pred_nodes()
-    G.find_succ_nodes()
+    G.update()
     del pData
 
     print(G.predDict['N001901'])
@@ -428,13 +510,28 @@ if __name__ == '__main__':
     print(G.inDegree['N001693'])
     print(TopologicalSort(G))
     print(calQuantity(G)['N000589'])
-    print(calCumLt(G)['N001777'])
     print(len(G.find_subtree('N001693')))
+    print(G.demDict)
+    print(calCumLt(G)['N001901'])
+    print(G.ltDict['N001901'])
+    print(findLongestPath(G, 'N001901'))
     print(findLongestPath(G, 'N001661'))
-    print(len(G.predDict['N001273']))
-    print(len(findLongestPath(G, 'N001661')))
+    print(calLtProportion(G))
+    print(calNodeScore(G))
 
     g1 = GeneralGraph(5, 8)
+    print(calCumLt(g1))
     print(g1.edges)
     print(g1.nodes)
     print(g1.demDict)
+
+    edges: set[tuple[int, int]] = {(1, 2), (1, 4), (3, 5)}
+    g2 = Digraph()
+    g2.add_edges_from(edges)
+    print(g2.nodes)
+    g2.find_pred_nodes()
+    g2.find_succ_nodes()
+    print(g2.predDict)
+    print(splitGraph(g2))
+    print(g2.nodes)
+    print(splitGraphWithNodes(g2, {3}))
