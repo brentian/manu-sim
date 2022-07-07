@@ -221,20 +221,21 @@ def TopologicalSort(graph: Digraph()):
     return topoSort
 
 
-# 统计成品所需要用到的半成品、原材料数目
 def calQuantity(graph: Digraph()):
-    nodeQuantity = {node: 0 for node in graph.nodes}
-    for i in graph.demDict.keys():
-        nodeQuantity[i] = 1
-    reverseTopoSort = list(reversed(TopologicalSort(graph)))
-    graph.update()
-    inDegree = graph.inDegree.copy()
-    predDict = graph.predDict.copy()
-    for i in reverseTopoSort:
-        if inDegree[i] == 0:
-            break
-        for j in predDict[i]:
-            nodeQuantity[j] += nodeQuantity[i] * graph.quaDict[(j, i)]
+    nodeQuantity = dict()
+    for product in graph.demDict.keys():
+        stk = dict()
+        stk[product] = 1
+        queue = deque()
+        queue.append(product)
+        while queue:
+            x = queue.popleft()
+            for pred in graph.predDict[x]:
+                queue.append(pred)
+                if not pred in stk:
+                    stk[pred] = 0
+                stk[pred] += stk[x] * graph.quaDict[(pred, x)]
+        nodeQuantity[product] = stk
     return nodeQuantity
 
 
@@ -242,7 +243,6 @@ def calQuantity(graph: Digraph()):
 def calCumLt(graph: Digraph()):
     cumLtDict = {node: 0 for node in graph.nodes}
     topoSort = TopologicalSort(graph)
-    #graph.find_pred_nodes()
     predDict = graph.predDict.copy()
     for i in topoSort:
         if not predDict[i]:
@@ -472,7 +472,7 @@ def splitGraph(graph: Digraph()):
             visited[x] = True
             nodes.discard(x)
             if not graph.predDict[x] and not graph.succDict[x]:
-                 stk.append(x)
+                stk.append(x)
             for pred in graph.predDict[x]:
                 if not visited[pred]:
                     queue.append(pred)
@@ -509,7 +509,7 @@ if __name__ == '__main__':
     print(G.succDict['N001661'])
     print(G.inDegree['N001693'])
     print(TopologicalSort(G))
-    print(calQuantity(G)['N000589'])
+    print(calQuantity(G))
     print(len(G.find_subtree('N001693')))
     print(G.demDict)
     print(calCumLt(G)['N001901'])
